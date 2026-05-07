@@ -1,0 +1,3 @@
+{
+  "description": "## Context\n\nFix the bug.\n\n## Acceptance Criteria\n\n- The bug is fixed\n- Tests pass\n- No regressions introduced\n\n## Technical Details\n\nSee the related Slack thread for more information about what needs to change."
+}

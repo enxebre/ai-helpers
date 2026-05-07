@@ -1,0 +1,282 @@
+# Skill eval for code-review:classify-review-comment
+#
+# Tests the real skill at ../skills/classify-review-comment/.
+# Uses claude-agent-sdk provider with Vertex AI (set CLAUDE_CODE_USE_VERTEX=true).
+#
+# Usage:
+#   make eval-plugins EVAL_FILTER=classify-review-comment
+
+description: "Skill eval: code-review:classify-review-comment"
+
+providers:
+  - id: anthropic:claude-agent-sdk
+    label: classify-review-comment
+    config:
+      model: claude-sonnet-4-6
+      plugins:
+        - type: local
+          path: ../
+      skills: ['code-review:classify-review-comment']
+      append_allowed_tools: ['Skill', 'Read']
+      permission_mode: 'auto'
+      output_format:
+        type: json_schema
+        schema:
+          type: object
+          properties:
+            severity:
+              type: string
+              enum: [nitpick, suggestion, required_change, question, unclassified]
+            topic:
+              type: string
+              enum: [style, logic_bug, test_gap, api_design, architecture_design, security, documentation, ci, approval, process, unclassified]
+            confidence:
+              type: number
+            rationale:
+              type: string
+          required: [severity, topic, confidence, rationale]
+
+prompts:
+  - "{{prompt}}"
+
+defaultTest:
+  options:
+    disableVarExpansion: true
+    provider:
+      id: vertex:claude-opus-4-6
+      config:
+        projectId: "{{ env.ANTHROPIC_VERTEX_PROJECT_ID }}"
+        region: global
+        temperature: 0
+  assert:
+    - type: skill-used
+      value: code-review:classify-review-comment
+    - type: not-skill-used
+      value: code-review:lang-go
+    - type: not-skill-used
+      value: code-review:profile-hypershift
+
+tests:
+  # --- Golden tests: known-correct classifications from SKILL.md examples ---
+
+  - description: "classify/nitpick-style — variable grouping nit"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "small nit: I would move the vars `key`, `log` and `cloudName` to `var (` section just to be consistent."
+    assert:
+      - type: javascript
+        value: "output.severity === 'nitpick'"
+        weight: 3
+      - type: javascript
+        value: "output.topic === 'style'"
+        weight: 3
+      - type: javascript
+        value: "output.confidence >= 0.90"
+        weight: 1
+
+  - description: "classify/question-api_design — API choice question"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "Why not use NewARMClientOptions here for the clientOptions?"
+    assert:
+      - type: javascript
+        value: "output.severity === 'question'"
+        weight: 3
+      - type: javascript
+        value: "output.topic === 'api_design'"
+        weight: 3
+
+  - description: "classify/required_change-logic_bug — nil panic"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "This will panic if `items` is nil — needs a nil check before the loop"
+    assert:
+      - type: javascript
+        value: "output.severity === 'required_change'"
+        weight: 3
+      - type: javascript
+        value: "output.topic === 'logic_bug'"
+        weight: 3
+      - type: javascript
+        value: "output.confidence >= 0.90"
+        weight: 1
+
+  - description: "classify/required_change-logic_bug — install failure"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "failing during `hypershift install`\n```\nClusterRoleBinding is invalid: roleRef.kind: Unsupported value\n```"
+    assert:
+      - type: javascript
+        value: "output.severity === 'required_change'"
+        weight: 3
+      - type: javascript
+        value: "output.topic === 'logic_bug'"
+        weight: 3
+
+  - description: "classify/required_change-test_gap — failing unit tests"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "hypershift-jira-solve-ci - the unit test job is failing and needs fixed"
+    assert:
+      - type: javascript
+        value: "output.severity === 'required_change'"
+        weight: 3
+      - type: javascript
+        value: "output.topic === 'test_gap'"
+        weight: 3
+
+  - description: "classify/suggestion-ci — rebase for CI"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "hypershift-jira-solve-ci - rebase the PR to fix the konflux issues"
+    assert:
+      - type: javascript
+        value: "output.severity === 'suggestion'"
+        weight: 3
+      - type: javascript
+        value: "output.topic === 'ci'"
+        weight: 3
+
+  - description: "classify/required_change-process — code not pushed"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "hypershift-jira-solve-ci - this still needs fixed since the code did not get pushed"
+    assert:
+      - type: javascript
+        value: "output.severity === 'required_change'"
+        weight: 3
+      - type: javascript
+        value: "output.topic === 'process'"
+        weight: 3
+
+  - description: "classify/suggestion-ci — override with analysis"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "`e2e-aws-4-21` failed on `Teardown` but due to uncleaned cloud resources, not VPC endpoint blocking the finalizer\n/override ci/prow/e2e-aws-4-21"
+    assert:
+      - type: javascript
+        value: "output.severity === 'suggestion'"
+        weight: 3
+      - type: javascript
+        value: "output.topic === 'ci'"
+        weight: 3
+
+  - description: "classify/unclassified-approval — reviewer withdrawal"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "Oh no that's ok. I missed that part. No changes requested."
+    assert:
+      - type: javascript
+        value: "output.severity === 'unclassified'"
+        weight: 3
+      - type: javascript
+        value: "output.topic === 'approval'"
+        weight: 3
+
+  - description: "classify/unclassified-process — duplicate marking"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "dup of https://github.com/openshift/hypershift/pull/7727"
+    assert:
+      - type: javascript
+        value: "output.severity === 'unclassified'"
+        weight: 3
+      - type: javascript
+        value: "output.topic === 'process'"
+        weight: 3
+
+  - description: "classify/required_change-logic_bug — case mismatch root cause"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "The root cause of the CI failure in this PR has been identified. The fix in `rejectVpcEndpointConnections` doesn't work because of a **case mismatch** between AWS API responses and SDK v2 enum constants."
+    assert:
+      - type: javascript
+        value: "output.severity === 'required_change'"
+        weight: 3
+      - type: javascript
+        value: "output.topic === 'logic_bug'"
+        weight: 3
+      - type: javascript
+        value: "output.confidence >= 0.90"
+        weight: 1
+
+  - description: "classify/suggestion-architecture_design — controller separation"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "This controller is doing too much — the reconciler should delegate VPC cleanup to a separate controller instead of inlining it"
+    assert:
+      - type: javascript
+        value: "output.severity === 'suggestion'"
+        weight: 3
+      - type: javascript
+        value: "output.topic === 'architecture_design'"
+        weight: 3
+
+  - description: "classify/required_change-security — token logging"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "The service account token is being logged in plain text here — this needs to be redacted"
+    assert:
+      - type: javascript
+        value: "output.severity === 'required_change'"
+        weight: 3
+      - type: javascript
+        value: "output.topic === 'security'"
+        weight: 3
+      - type: javascript
+        value: "output.confidence >= 0.90"
+        weight: 1
+
+  # --- Ambiguous boundary cases ---
+
+  - description: "classify/ambiguous — timeout suggestion"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "consider using a context.WithTimeout here to avoid hanging forever"
+    assert:
+      - type: javascript
+        value: |
+          return ['suggestion', 'required_change'].includes(output.severity);
+        weight: 2
+      - type: javascript
+        value: |
+          return ['logic_bug', 'api_design'].includes(output.topic);
+        weight: 2
+      - type: javascript
+        value: "output.confidence >= 0 && output.confidence <= 1.0"
+      - type: javascript
+        value: "typeof output.rationale === 'string' && output.rationale.length > 0"
+
+  # --- Routing: Go content should still use classify, not lang-go ---
+
+  - description: "classify/routing — Go comment routes to classify, not lang-go"
+    vars:
+      prompt: |
+        Classify this review comment:
+        "This Go function should return an error instead of panicking"
+    assert:
+      - type: javascript
+        value: |
+          return ['suggestion', 'required_change'].includes(output.severity);
+        weight: 2
+      - type: javascript
+        value: |
+          return ['logic_bug', 'api_design'].includes(output.topic);
+        weight: 2
+
+evaluateOptions:
+  maxConcurrency: 3

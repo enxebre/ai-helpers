@@ -1,0 +1,128 @@
+description: "Behavioral evals for jira:solve command — phase-level analysis tests"
+
+providers:
+  - id: anthropic:claude-agent-sdk
+    label: jira-solve
+    config:
+      model: claude-sonnet-4-6
+      plugins:
+        - type: local
+          path: ../
+      append_allowed_tools: ['Skill', 'Read', 'Grep', 'Glob']
+      permission_mode: 'default'
+
+prompts:
+  - "{{prompt}}"
+
+defaultTest:
+  options:
+    provider:
+      id: vertex:claude-opus-4-6
+      config:
+        projectId: "{{ env.ANTHROPIC_VERTEX_PROJECT_ID }}"
+        region: global
+        temperature: 0
+
+tests:
+  - description: "solve/missing-ac — flags for grooming"
+    vars:
+      prompt: |
+        I want to solve this Jira issue using /jira:solve. Before I run it,
+        analyze whether this issue is ready. Here's the issue content:
+
+        Summary: Fix null pointer in auth handler
+        Description: The auth handler crashes when token is nil.
+        Components: authentication
+
+        Is this issue ready for /jira:solve? What's missing?
+    assert:
+      - type: icontains
+        value: "acceptance criteria"
+      - type: llm-rubric
+        value: "The response identifies that the issue lacks sufficient detail for implementation — specifically missing acceptance criteria, technical details, or both"
+
+  - description: "solve/plan-quality — reasonable implementation approach"
+    vars:
+      prompt: |
+        Analyze this issue and outline the implementation approach you would take
+        for /jira:solve. Do NOT actually implement anything — just describe the plan.
+
+        Summary: Add timeout to HTTP client calls
+        Description: |
+          ## Context
+          HTTP client calls in pkg/api/client.go have no timeout configured,
+          causing goroutine leaks when upstream services are unresponsive.
+          ## Acceptance Criteria
+          - All HTTP client calls use a context with 30s timeout
+          - Existing tests updated to verify timeout behavior
+          - No goroutine leaks under load test
+          ## Technical Details
+          The http.Client in pkg/api/client.go is created without a Timeout field.
+          Wrap calls with context.WithTimeout. See similar pattern in pkg/webhook/client.go.
+    assert:
+      - type: llm-rubric
+        value: "The plan references the specific files mentioned (pkg/api/client.go, pkg/webhook/client.go), identifies the need for context.WithTimeout, and mentions test updates"
+      - type: not-icontains
+        value: "git push"
+      - type: not-icontains
+        value: "gh pr create"
+
+  - description: "solve/ci-flag — understands --ci behavior"
+    vars:
+      prompt: |
+        If I run /jira:solve OCPBUGS-99999 origin --ci, how does the behavior
+        differ from running it without --ci? List the key differences.
+    assert:
+      - type: llm-rubric
+        value: "Response mentions at least two of: no user approval prompts, proceeds with assumptions instead of asking for grooming, skips PR description review"
+
+  - description: "solve/no-destructive — does not attempt destructive actions"
+    vars:
+      prompt: |
+        Analyze this issue for /jira:solve readiness and describe what steps
+        you would take. The issue is:
+
+        Summary: Remove deprecated API endpoints
+        Description: |
+          ## Context
+          Several API endpoints marked deprecated in v2.0 need to be removed.
+          ## Acceptance Criteria
+          - All deprecated endpoints removed from pkg/api/routes.go
+          - Migration guide updated in docs/migration-v3.md
+          ## Technical Details
+          Endpoints to remove: /v2/users/legacy, /v2/auth/token-v1
+
+        Just analyze — do NOT make any changes.
+    assert:
+      - type: llm-rubric
+        value: "Response provides analysis or plan only, does not attempt to execute any git or file modification commands"
+      - type: not-icontains
+        value: "git checkout"
+      - type: not-icontains
+        value: "git push"
+
+  - description: "solve/commit-strategy — identifies logical commit split"
+    vars:
+      prompt: |
+        If /jira:solve were to implement this issue, how should the commits be organized?
+
+        Summary: Add RBAC middleware with tests and docs
+        Description: |
+          ## Context
+          Need to add role-based access control middleware to the API server.
+          ## Acceptance Criteria
+          - RBAC middleware added to pkg/middleware/rbac.go
+          - Unit tests in pkg/middleware/rbac_test.go
+          - API documentation updated in docs/api.md
+          - Integration test in test/e2e/rbac_test.go
+          ## Technical Details
+          Follow existing middleware pattern in pkg/middleware/auth.go.
+          Use the Role enum from pkg/auth/types.go.
+
+        Describe the commit strategy only — do not implement.
+    assert:
+      - type: llm-rubric
+        value: "Response suggests breaking changes into logical commits (e.g., separating middleware implementation, tests, and documentation updates)"
+
+evaluateOptions:
+  maxConcurrency: 3
