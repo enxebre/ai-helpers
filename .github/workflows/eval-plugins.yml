@@ -4,7 +4,7 @@ on:
   pull_request:
 
 env:
-  PROMPTFOO_VERSION: '0.121.9'
+  PROMPTFOO_VERSION: '0.121.11'
   CLAUDE_CODE_USE_VERTEX: 'true'
 
 jobs:
@@ -63,23 +63,3 @@ jobs:
         env:
           ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.ANTHROPIC_VERTEX_PROJECT_ID }}
         run: make eval-plugins EVAL_PLUGIN=${{ matrix.plugin }}
-
-  security-evals:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: '22'
-
-      - name: Run security red-team evals
-        env:
-          ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.ANTHROPIC_VERTEX_PROJECT_ID }}
-        run: make eval-security

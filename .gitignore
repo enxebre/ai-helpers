@@ -41,7 +41,6 @@ package-lock.json
 
 # Promptfoo eval output
 .promptfoo/
-evals/security/redteam.yaml
 
 # Various logs and metrics tracking info
 *.log
