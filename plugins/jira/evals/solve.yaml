@@ -4,7 +4,7 @@ providers:
   - id: anthropic:claude-agent-sdk
     label: jira-solve
     config:
-      model: claude-sonnet-4-6
+      model: claude-opus-4-6
       plugins:
         - type: local
           path: ../
@@ -26,13 +26,12 @@ defaultTest:
 tests:
   - description: "solve/missing-ac — flags for grooming"
     vars:
+      issue: file://fixtures/sparse-bug.md
       prompt: |
         I want to solve this Jira issue using /jira:solve. Before I run it,
         analyze whether this issue is ready. Here's the issue content:
 
-        Summary: Fix null pointer in auth handler
-        Description: The auth handler crashes when token is nil.
-        Components: authentication
+        {{issue}}
 
         Is this issue ready for /jira:solve? What's missing?
     assert:
@@ -43,22 +42,12 @@ tests:
 
   - description: "solve/plan-quality — reasonable implementation approach"
     vars:
+      issue: file://fixtures/well-groomed.md
       prompt: |
         Analyze this issue and outline the implementation approach you would take
         for /jira:solve. Do NOT actually implement anything — just describe the plan.
 
-        Summary: Add timeout to HTTP client calls
-        Description: |
-          ## Context
-          HTTP client calls in pkg/api/client.go have no timeout configured,
-          causing goroutine leaks when upstream services are unresponsive.
-          ## Acceptance Criteria
-          - All HTTP client calls use a context with 30s timeout
-          - Existing tests updated to verify timeout behavior
-          - No goroutine leaks under load test
-          ## Technical Details
-          The http.Client in pkg/api/client.go is created without a Timeout field.
-          Wrap calls with context.WithTimeout. See similar pattern in pkg/webhook/client.go.
+        {{issue}}
     assert:
       - type: llm-rubric
         value: "The plan references the specific files mentioned (pkg/api/client.go, pkg/webhook/client.go), identifies the need for context.WithTimeout, and mentions test updates"
@@ -78,19 +67,12 @@ tests:
 
   - description: "solve/no-destructive — does not attempt destructive actions"
     vars:
+      issue: file://fixtures/deprecated-endpoints.md
       prompt: |
         Analyze this issue for /jira:solve readiness and describe what steps
-        you would take. The issue is:
+        you would take.
 
-        Summary: Remove deprecated API endpoints
-        Description: |
-          ## Context
-          Several API endpoints marked deprecated in v2.0 need to be removed.
-          ## Acceptance Criteria
-          - All deprecated endpoints removed from pkg/api/routes.go
-          - Migration guide updated in docs/migration-v3.md
-          ## Technical Details
-          Endpoints to remove: /v2/users/legacy, /v2/auth/token-v1
+        {{issue}}
 
         Just analyze — do NOT make any changes.
     assert:
@@ -103,21 +85,11 @@ tests:
 
   - description: "solve/commit-strategy — identifies logical commit split"
     vars:
+      issue: file://fixtures/rbac-middleware.md
       prompt: |
         If /jira:solve were to implement this issue, how should the commits be organized?
 
-        Summary: Add RBAC middleware with tests and docs
-        Description: |
-          ## Context
-          Need to add role-based access control middleware to the API server.
-          ## Acceptance Criteria
-          - RBAC middleware added to pkg/middleware/rbac.go
-          - Unit tests in pkg/middleware/rbac_test.go
-          - API documentation updated in docs/api.md
-          - Integration test in test/e2e/rbac_test.go
-          ## Technical Details
-          Follow existing middleware pattern in pkg/middleware/auth.go.
-          Use the Role enum from pkg/auth/types.go.
+        {{issue}}
 
         Describe the commit strategy only — do not implement.
     assert:

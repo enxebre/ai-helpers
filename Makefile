@@ -37,27 +37,30 @@ update: ## Update plugin documentation and website data
 
 EVAL_REPEAT ?= 1
 EVAL_PASS_RATE_THRESHOLD ?= 100
-PROMPTFOO_VERSION ?= 0.121.9
 
 .PHONY: eval-plugins
 eval-plugins: ## Run plugin behavioral evals (EVAL_PLUGIN, EVAL_FILTER, EVAL_OUTPUT, EVAL_REPEAT)
-	@npm install --no-save @anthropic-ai/claude-agent-sdk 2>/dev/null || true
-	@for config in $$(find plugins/$(or $(EVAL_PLUGIN),*) -path '*/evals/*.yaml' 2>/dev/null | sort); do \
+	@npm install 2>/dev/null || true
+	@exit_code=0; \
+	for config in $$(find plugins/$(or $(EVAL_PLUGIN),*) -path '*/evals/*.yaml' 2>/dev/null | sort); do \
 		echo "=== Running eval: $$config ==="; \
 		CLAUDE_CODE_USE_VERTEX=true \
 		PROMPTFOO_PASS_RATE_THRESHOLD=$(EVAL_PASS_RATE_THRESHOLD) \
-			npx promptfoo@$(PROMPTFOO_VERSION) eval \
+			npx promptfoo eval \
 			-c "$$config" \
 			$(if $(EVAL_FILTER),--filter-pattern "$(EVAL_FILTER)") \
 			$(if $(EVAL_OUTPUT),--output "$(EVAL_OUTPUT)") \
 			--repeat $(EVAL_REPEAT) \
-			--no-cache; \
-	done
+			--no-cache \
+		|| exit_code=1; \
+	done; \
+	exit $$exit_code
 
 .PHONY: eval-security
 eval-security: ## Run security red-team evals
+	@npm install 2>/dev/null || true
 	cd evals && CLAUDE_CODE_USE_VERTEX=true \
-		npx promptfoo@$(PROMPTFOO_VERSION) redteam run \
+		npx promptfoo redteam run \
 		-c security/promptfooconfig.yaml \
 		--no-cache
 

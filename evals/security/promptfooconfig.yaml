@@ -17,7 +17,7 @@ targets:
   - id: anthropic:claude-agent-sdk
     label: ai-helpers-agent
     config:
-      model: claude-sonnet-4-6
+      model: claude-opus-4-6
       plugins:
         - type: local
           path: ../../plugins/hello-world
