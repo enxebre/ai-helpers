@@ -56,5 +56,13 @@ eval-plugins: ## Run plugin behavioral evals (EVAL_PLUGIN, EVAL_FILTER, EVAL_OUT
 	done; \
 	exit $$exit_code
 
+.PHONY: eval-security
+eval-security: ## Run security red-team evals
+	@npm install 2>/dev/null || true
+	cd evals && CLAUDE_CODE_USE_VERTEX=true \
+		npx promptfoo redteam run \
+		-c security/promptfooconfig.yaml \
+		--no-cache
+
 .DEFAULT_GOAL := help
 
