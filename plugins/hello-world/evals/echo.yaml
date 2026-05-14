@@ -8,7 +8,7 @@ providers:
       plugins:
         - type: local
           path: ../
-      append_allowed_tools: ['Bash']
+      append_allowed_tools: ['Bash', 'Skill']
       permission_mode: 'auto'
 
 prompts:
