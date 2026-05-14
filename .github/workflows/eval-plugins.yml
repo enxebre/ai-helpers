@@ -2,8 +2,6 @@ name: Plugin Evals
 
 on:
   pull_request:
-  issue_comment:
-    types: [created]
 
 permissions: {}
 
@@ -12,44 +10,21 @@ env:
 
 jobs:
   detect-changed-plugins:
-    # Run on: any pull_request, OR /run-evals comment from org member
-    if: >-
-      github.event_name == 'pull_request' ||
-      (github.event.issue.pull_request &&
-       contains(github.event.comment.body, '/run-evals') &&
-       (github.event.comment.author_association == 'MEMBER' ||
-        github.event.comment.author_association == 'COLLABORATOR'))
     runs-on: ubuntu-latest
     outputs:
       plugins: ${{ steps.detect.outputs.plugins }}
       has_plugins: ${{ steps.detect.outputs.has_plugins }}
-      pr_ref: ${{ steps.refs.outputs.pr_ref }}
     steps:
-      - name: Resolve PR refs
-        id: refs
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "base_ref=${{ github.base_ref }}" >> "$GITHUB_OUTPUT"
-            echo "pr_ref=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
-          else
-            PR_DATA=$(gh pr view ${{ github.event.issue.number }} --json baseRefName,headRefOid)
-            echo "base_ref=$(echo $PR_DATA | jq -r '.baseRefName')" >> "$GITHUB_OUTPUT"
-            echo "pr_ref=refs/pull/${{ github.event.issue.number }}/merge" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
-
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ steps.refs.outputs.pr_ref }}
           persist-credentials: false
           fetch-depth: 0
 
       - name: Detect changed plugins with evals
         id: detect
         run: |
-          plugins=$(git diff --name-only origin/${{ steps.refs.outputs.base_ref }}...HEAD -- plugins/ \
+          plugins=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- plugins/ \
             | sed -n 's|^plugins/\([^/]*\)/.*|\1|p' \
             | sort -u \
             | while read plugin; do
@@ -70,7 +45,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      checks: write
     strategy:
       fail-fast: false
       matrix:
@@ -79,7 +53,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.detect-changed-plugins.outputs.pr_ref }}
           persist-credentials: false
 
       - name: Setup Node.js
