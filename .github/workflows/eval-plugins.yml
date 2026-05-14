@@ -100,14 +100,6 @@ jobs:
           mkdir -p "$EVAL_OUTPUT_DIR"
           make eval-plugins EVAL_PLUGIN=${{ matrix.plugin }}
 
-      - name: Publish eval report
-        if: always()
-        uses: dorny/test-reporter@4a2e97665d5fa767581ef38eca97b9694bd4eef4 # v2
-        with:
-          name: "Eval: ${{ matrix.plugin }}"
-          path: eval-results/*.xml
-          reporter: java-junit
-
       - name: Upload eval results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
