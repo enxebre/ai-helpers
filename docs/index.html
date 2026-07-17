@@ -2430,9 +2430,15 @@ footer a { color: var(--primary); }
           "meta": ""
         },
         {
+          "name": "implement",
+          "description": "Implement a fix for a JIRA issue — analyze the codebase, write code, add tests, and commit. Does not create PRs or run reviews. Use as a sub-skill of solve or standalone for code-only changes.",
+          "description_html": "Implement a fix for a JIRA issue — analyze the codebase, write code, add tests, and commit. Does not create PRs or run reviews. Use as a sub-skill of solve or standalone for code-only changes.",
+          "meta": ""
+        },
+        {
           "name": "solve",
-          "description": "Analyze a JIRA issue and create a pull request to solve it. Use when the user wants to implement a fix or feature described in a Jira issue, push a branch, and open a draft PR.",
-          "description_html": "Analyze a JIRA issue and create a pull request to solve it. Use when the user wants to implement a fix or feature described in a Jira issue, push a branch, and open a draft PR.",
+          "description": "End-to-end orchestrator that chains implement → review → fix for a JIRA issue. Dispatches to sub-skills in the same session. Never writes code directly.",
+          "description_html": "End-to-end orchestrator that chains implement → review → fix for a JIRA issue. Dispatches to sub-skills in the same session. Never writes code directly.",
           "meta": ""
         }
       ],

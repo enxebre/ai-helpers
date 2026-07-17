@@ -1,6 +1,6 @@
 ---
 name: solve
-description: Analyze a JIRA issue and create a pull request to solve it. Use when the user wants to implement a fix or feature described in a Jira issue, push a branch, and open a draft PR.
+description: End-to-end orchestrator that chains implement → review → fix for a JIRA issue. Dispatches to sub-skills in the same session. Never writes code directly.
 ---
 
 ## Name
@@ -13,109 +13,49 @@ openshift-developer:solve
 
 ## Description
 
-Analyzes a JIRA issue, implements a solution in the current repository, and creates a comprehensive pull request with the necessary changes.
-
-Takes a JIRA URL or issue key, fetches the issue description and requirements, analyzes the codebase to understand how to implement the solution, and produces a branch with well-structured commits.
+Orchestrates the full solve pipeline for a JIRA issue by dispatching to sub-skills in sequence. Never writes code directly — all coding happens through the implement skill, all review through the code-review skill. Makes decisions about iteration based on review findings.
 
 ## Implementation
 
-### Step 1: Issue Analysis
+### Step 1: Implement
 
-Parse the JIRA issue and fetch details:
+Invoke the implement skill to analyze the issue, write the fix, and commit:
 
-1. Use curl to fetch JIRA issue data:
-   ```bash
-   curl -s -u "$JIRA_USERNAME:$JIRA_API_TOKEN" "https://redhat.atlassian.net/rest/api/3/issue/{$1}"
-   ```
-2. Parse JSON response to extract:
-   - Issue summary and description
-   - From within the description expect the following sections:
-     - Required: Context, Acceptance criteria
-     - Optional: Steps to reproduce (for bugs), Expected vs actual behavior
-3. If `--ci` flag (`$3`) is NOT set: Ask the user for further issue grooming if the required sections are missing
-4. If `--ci` flag (`$3`) IS set: Proceed with available information, making reasonable assumptions where needed
+```text
+/openshift-developer:implement $1 $2 $3
+```
 
-### Step 2: Codebase Analysis
+After the implement skill completes, check whether code changes were produced:
 
-Search and analyze relevant code:
+```bash
+git diff --stat HEAD~1 2>/dev/null || echo "no changes"
+```
 
-- Find related files and functions
-- Understand current implementation
-- Identify areas that need changes
-- Use Grep and Glob tools to search for:
-  - Related function names mentioned in JIRA
-  - File patterns related to the component
-  - Similar existing implementations
-  - Test files that need updates
+If no code changes were produced, stop and report that no changes were needed.
 
-### Step 3: Solution Implementation
+### Step 2: Review
 
-1. Think hard and create a detailed, step-by-step plan. Save it to `spec-$1.md` within the `.work/solve/` folder (e.g. `.work/solve/spec-OCPBUGS-12345.md`)
-2. If `--ci` flag (`$3`) is NOT set: Ask the user to review the plan and give them the choice to modify it before starting
-3. If `--ci` flag (`$3`) IS set: Proceed immediately without waiting for approval
-4. Implement the plan:
-   - Make necessary code changes using Edit/MultiEdit tools
-   - Follow existing code patterns and conventions
-   - Add or update tests when code behavior changes or new functions are introduced
-   - Update documentation if needed within the `docs/` folder
-   - If the problem is too complex consider delegating to one of the SME agents
-   - Ensure godoc comments are generated for any newly created public functions
-     - Use your best judgement if godoc comments are needed for private functions
-     - A comment should not be generated for a simple function like `func add(int a, b) int { return a + b }`
-   - Create unit tests for any newly created functions
+Invoke the code review skill to review the uncommitted or recently committed changes:
 
-### Step 4: Commit Creation
+```text
+/code-review:pre-commit-review --language go
+```
 
-1. Create feature branch using the jira-key `$1` as the branch name (e.g. `git checkout -b fix-{jira-key}`)
-2. Break commits into logical components based on the nature of the changes
-3. Each commit must honor https://www.conventionalcommits.org/en/v1.0.0/ and always include a commit message body articulating the "why"
-4. Use your judgment to organize commits in a way that makes them easy to review and understand
-5. Common logical groupings (use as guidance, not rigid rules):
-   - API changes: Changes in `api/` directory (types, CRDs)
-     - Example: `git commit -m"feat(api): Update HostedCluster API for X" -m"Add new fields to support Y functionality"`
-   - Vendor changes: Dependency updates in `vendor/` directory
-     - Example: `git commit -m"chore(vendor): Update dependencies for X" -m"Required to pick up bug fixes in upstream library Y"`
-   - Generated code: Auto-generated clients, informers, listers, and CRDs
-     - Example: `git commit -m"chore(generated): Regenerate clients and CRDs" -m"Regenerate after API changes to ensure client code is in sync"`
-   - CLI changes: User-facing command changes in `cmd/` directory
-     - Example: `git commit -m"feat(cli): Add support for X flag" -m"This allows users to configure Y behavior at cluster creation time"`
-   - Operator changes: Controller logic in `operator/` or `controllers/`
-     - Example: `git commit -m"feat(operator): Implement X controller logic" -m"Without this the controller won't reconcile when Y condition occurs"`
-   - Support/utilities: Shared code in `support/` directory
-     - Example: `git commit -m"refactor(support): Extract common X utility" -m"Consolidate duplicated logic from multiple controllers into shared helper"`
-   - Tests: Test additions or modifications
-     - Example: `git commit -m"test: Add tests for X functionality" -m"Ensure the new behavior is covered by unit tests to prevent regressions"`
-   - Documentation: Changes in `docs/` directory
-     - Example: `git commit -m"docs: Document X feature" -m"Help users understand how to configure and use the new capability"`
-6. Push the branch with all commits against the remote specified in argument `$2`
+### Step 3: Evaluate findings and iterate
 
-### Step 5: PR Creation
+If the review produced no findings, stop — the implementation is complete.
 
-- If `--ci` flag (`$3`) IS set: Skip PR creation — it will be handled by a subsequent pipeline step (e.g. `/openshift-developer:create-pr`). Output: "Skipping PR creation in CI mode — branch pushed, PR will be created by the pipeline."
-- If `--ci` flag (`$3`) is NOT set:
-  - Create pull request with:
-    - Clear title referencing JIRA issue as a prefix (e.g. `OCPBUGS-12345: ...`)
-    - The PR description should satisfy the template within `.github/PULL_REQUEST_TEMPLATE.md` if the file exists
-    - Always include the following footer:
-      ```text
-      Always review AI generated responses prior to use.
-      Generated with [Claude Code](https://claude.com/claude-code) via openshift-developer plugin
-      ```
-    - Always create as draft PR
-    - Always create the PR against the remote origin
-    - Use gh cli if you need to
+If the review produced findings, invoke the address-review skill to fix them:
 
-### Step 6: PR Description Review
+```text
+/openshift-developer:address-review-precommit
+```
 
-- If `--ci` flag (`$3`) IS set: Skip — no PR was created in CI mode
-- If `--ci` flag (`$3`) is NOT set:
-  - After creating the PR, display the PR URL and description to the user
-  - Ask the user: "Please review the PR description. Would you like me to update it? (yes/no)"
-  - If the user says yes or requests changes:
-    - Ask what changes they'd like to make
-    - Update the PR description using `gh pr edit {PR_NUMBER} --body "{new_description}"`
-    - Repeat this review step until the user is satisfied
-  - If the user says no or is satisfied, acknowledge and provide next steps
+After fixing, run the review again (Step 2) to check whether the fixes introduced new issues.
+
+If the second review produces new findings, invoke address-review-precommit one more time. Do not review a third time.
+
+Maximum 2 review+fix cycles. If findings remain after the second fix, note them in the conversation output as known issues.
 
 ## Arguments
 - `$1` — The JIRA issue to solve (required)
@@ -136,5 +76,6 @@ Search and analyze relevant code:
 
 ## Guidelines
 
-- Authentication uses Basic auth with `JIRA_USERNAME` and `JIRA_API_TOKEN` for Atlassian Cloud
-- The command will provide progress updates and create a comprehensive solution addressing all requirements from the JIRA issue
+- **Orchestrator, not coder.** Never write code or modify source files directly. All coding happens through `/openshift-developer:implement`. The only direct actions are invoking skills and checking git state.
+- Sub-skills are invoked via the Skill tool in the same session — no separate processes.
+- Authentication uses Basic auth with `JIRA_USERNAME` and `JIRA_API_TOKEN` for Atlassian Cloud.
