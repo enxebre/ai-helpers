@@ -83,6 +83,7 @@ their tier labels.
 | case-004 | openshift/hypershift#10224 | Critical | Default guest capabilities, which the HCCO reconciles into existing guests |
 | case-005 | openshift/hypershift#8656 | Critical (Moderate also accepted) | Deterministic mirror order in a control plane environment variable the HO renders for every hosted cluster with registry overrides |
 | case-006 | openshift/hypershift#10223 | Low | CI workflow and documentation only |
+| case-007 | openshift/hypershift#10327 | Critical | In-place NodePool label, taint, and AWS tag propagation to existing Machines, which decides how workloads are scheduled and run |
 
 The subject and LLM judges run on Claude Code with `claude-opus-5-5`. The run
 may read the repository at `base_sha` to trace callers, and nothing else of

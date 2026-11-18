@@ -121,10 +121,28 @@ Ask what happens if the change is wrong, and name the failure: what a
 plausible defect in these lines would break, and for whom. Touching a sensitive
 path is not a failure by itself; judge what the change can do there.
 
-**Critical** when a defect could disrupt running clusters or workloads:
+Judge the failure where the written values land, not by how they are written:
+
+- **Stale or wrong is a failure.** A change to how values reach running systems
+  (create or patch, skip conditions, error handling, ordering) can leave them
+  unwritten or wrong even when the values it computes are unchanged. Judge what
+  those values being stale or wrong does to their consumers. A retry on the
+  next reconcile does not undo a deterministic defect.
+- **In place is not contained.** An update that avoids a rollout reaches every
+  existing object at once, with no new node or replica to fail first.
+- **Metadata is not inert.** Labels, taints, annotations, and cloud resource
+  tags are what schedulers, kubelets, DaemonSets, cloud providers, and
+  controllers act on.
+
+**Critical** when a defect could disrupt running clusters or workloads. The
+list gives examples, not the only ways: a change that matches none of them is
+still Critical when its failure disrupts running workloads.
 
 - rollouts, reboots, or replacement of nodes or node pools, or new nodes failing
   to join;
+- labels, taints, or tags on existing nodes, machines, or cloud resources, which
+  decide where workloads are scheduled, whether they keep running, and how a
+  cloud provider manages the resource;
 - upgrade and version-skew paths;
 - etcd membership, quorum, or data;
 - API or CRD changes existing clusters or clients consume;

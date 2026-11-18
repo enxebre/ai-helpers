@@ -1,0 +1,31 @@
+pr_url: https://github.com/openshift/hypershift/pull/10327
+expected_tier: critical
+acceptable_tiers: [critical]
+# The automated pipeline assessed it Moderate. Before the skill learned that
+# stale or wrong labels, taints, and tags disrupt workloads, claude-sonnet-5-5
+# reproduced that in 3 of 3 runs and claude-opus-5-5 at low effort in 1 of 3;
+# claude-opus-5-5 at high effort reached Critical in 5 of 5.
+# In the root AGENTS.md at base_sha, in none of the nested ones.
+agents_md_marker: "## Fleet-Wide Rollout Impact"
+ground_truth: >
+  Critical. Rewrites the two loops in the HyperShift operator's NodePool
+  controller that update existing machines on every NodePool reconcile:
+  propagateLabelsAndTaintsToMachines (NodePool node labels, the Global Pull
+  Secret label, and the taints annotation on CAPI Machines) and
+  reconcileAWSMachines (additional tags on AWSMachines). CreateOrPatch becomes
+  a merge patch that skips unchanged and deleted objects, and the Machine loop
+  now continues after a per-Machine error instead of returning. These values
+  are consumed by running clusters: the HCCO node controller copies the managed
+  labels onto guest Nodes and merges the taints into node.Spec.Taints, and
+  CAPA applies the tags, including the cloud-provider cluster ownership tag and
+  the spot termination-handler tag, to the EC2 instances. The NodePool
+  controller runs in the HO, so every NodePool on a management cluster gets
+  the new code at once when the HO is upgraded. In-place propagation avoids a
+  rollout, but labels and taints decide where workloads are scheduled and
+  whether they keep running: a defect that stops propagation or writes wrong
+  labels or taints breaks nodeSelectors, affinity, and DaemonSets such as the
+  Global Pull Secret one, blocks scheduling, or evicts pods (NoExecute), on
+  every NodePool. An assessment that rates it Moderate because the change is
+  in-place tag, label, and taint propagation rather than machine lifecycle,
+  rollouts, or data paths misses that the propagated values control how
+  workloads are scheduled and run on existing nodes.
